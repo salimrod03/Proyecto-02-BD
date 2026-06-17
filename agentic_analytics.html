@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agentic Analytics — Retail TPC-DS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;700&display=swap');
+
+  :root{
+
+    --bg:#f4f7fc;
+
+    --surface:#ffffff;
+
+    --border:#e2e8f0;
+
+    --accent:#2563eb;
+
+    --accent2:#7c3aed;
+
+    --warn:#f59e0b;
+
+    --text:#1e293b;
+
+    --muted:#64748b;
+
+    --code-bg:#f8fafc;
+
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header{
+    background:white;
+    box-shadow:0 4px 20px rgba(0,0,0,.05);
+    border:none;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; font-weight: 600; color: #fff;
+  }
+  header h1 { font-size: 15px; font-weight: 500; letter-spacing: .02em; }
+  header span { color: var(--muted); font-size: 12px; margin-left: 8px; }
+  .badge {
+    margin-left: auto;
+    background: rgba(79,140,255,.12);
+    border: 1px solid rgba(79,140,255,.3);
+    color: var(--accent);
+    font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+    padding: 3px 10px; border-radius: 20px;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: calc(100vh - 61px);
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+  .side-section-title {
+    font-size: 10px; font-weight: 600; letter-spacing: .12em;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .api-wrap { position: relative; }
+  .api-wrap input {
+    width: 100%; background: var(--code-bg);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; padding: 8px 32px 8px 10px;
+    outline: none; transition: border .2s;
+  }
+  .api-wrap input:focus { border-color: var(--accent); }
+  .eye-btn {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px;
+  }
+  .engine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .eng-btn {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--muted); font-size: 12px;
+    padding: 8px 4px; cursor: pointer; transition: all .15s; text-align: center;
+  }
+  .eng-btn.active {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(79,140,255,.08);
+  }
+  .suggested { display: flex; flex-direction: column; gap: 6px; }
+  .sug-btn {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px;
+    padding: 8px 10px; cursor: pointer; text-align: left;
+    transition: all .15s; line-height: 1.4;
+  }
+  .sug-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .dashboard-kpis{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    padding:20px 28px;
+}
+
+.kpi-card{
+    background:white;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+}
+
+.kpi-card span{
+    color:#64748b;
+    font-size:12px;
+}
+
+.kpi-card h2{
+    color:#2563eb;
+    margin-top:10px;
+    font-size:28px;
+}
+
+  /* ── Main ── */
+  main {
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Pipeline visualizer ── */
+  .pipeline {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 28px;
+    display: flex; align-items: center; gap: 0;
+  }
+  .pipe-step {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+    padding: 4px 12px; border-radius: 4px;
+    transition: all .3s;
+  }
+  .pipe-step.active { color: var(--accent); }
+  .pipe-step.done   { color: var(--accent2); }
+  .pipe-step .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); transition: background .3s;
+  }
+  .pipe-step.active .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .pipe-step.done  .dot  { background: var(--accent2); }
+  .pipe-arrow { color: var(--border); font-size: 12px; padding: 0 2px; }
+
+  /* ── Chat ── */
+  .chat-area {
+    flex: 1; overflow-y: auto; padding: 24px 28px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .msg { display: flex; gap: 12px; max-width: 860px; }
+  .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .avatar.agent { background: linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
+  .avatar.user  { background: var(--surface); border:1px solid var(--border); color:var(--muted); }
+  .bubble{
+
+    background:white;
+
+    border:none;
+
+    border-radius:18px;
+
+    box-shadow:
+      0 4px 15px
+      rgba(0,0,0,.08);
+
+  }
+  .msg.user .bubble {
+    background: rgba(79,140,255,.09); border-color: rgba(79,140,255,.25);
+  }
+
+  /* skill tags */
+  .skill-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-family:'IBM Plex Mono',monospace;
+    padding: 2px 8px; border-radius: 4px; margin-bottom: 8px;
+    background: rgba(79,140,255,.1); border:1px solid rgba(79,140,255,.2); color:var(--accent);
+  }
+  .skill-tag.sql  { background:rgba(0,229,176,.1); border-color:rgba(0,229,176,.2); color:var(--accent2); }
+  .skill-tag.exec { background:rgba(255,107,53,.1); border-color:rgba(255,107,53,.2); color:var(--warn); }
+
+  /* code block */
+  .code-block {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; margin: 10px 0; overflow: hidden;
+  }
+  .code-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 6px 12px; border-bottom:1px solid var(--border);
+    font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted);
+  }
+  .copy-btn {
+    background:none; border:none; cursor:pointer; color:var(--muted);
+    font-size:10px; font-family:'IBM Plex Mono',monospace;
+    transition:color .15s;
+  }
+  .copy-btn:hover { color: var(--accent2); }
+  pre {
+    padding:12px 14px; overflow-x:auto;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.7;
+    color: #a8d8b9;
+  }
+
+  /* result table */
+  .result-table-wrap { overflow-x:auto; margin-top:10px; border-radius:6px; border:1px solid var(--border); }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th {
+    background:var(--code-bg); padding:8px 12px; text-align:left;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--accent);
+    border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:.06em;
+  }
+  td { padding:8px 12px; border-bottom:1px solid rgba(30,35,48,.8); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(79,140,255,.04); }
+
+  /* metrics */
+  .metrics { display:flex; gap:12px; margin-top:10px; flex-wrap:wrap; }
+  .metric {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:6px; padding:10px 16px; min-width:120px;
+  }
+  .metric .val { font-size:22px; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--accent2); }
+  .metric .lbl { font-size:10px; color:var(--muted); margin-top:2px; }
+
+  /* loading */
+  .thinking { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+  .dots span {
+    display:inline-block; width:5px; height:5px; border-radius:50%;
+    background:var(--accent); margin:0 2px;
+    animation: bounce .9s infinite;
+  }
+  .dots span:nth-child(2){animation-delay:.15s}
+  .dots span:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+
+  /* input bar */
+  .input-bar {
+    border-top:1px solid var(--border); padding:16px 28px;
+    display:flex; gap:10px; align-items:flex-end;
+  }
+  .input-bar textarea {
+    flex:1; background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px;
+    padding:11px 14px; outline:none; resize:none;
+    min-height:44px; max-height:120px; transition:border .2s;
+    line-height:1.5;
+  }
+  .input-bar textarea:focus { border-color:var(--accent); }
+  .send-btn {
+    background:var(--accent); border:none; border-radius:8px;
+    color:#fff; font-size:13px; font-weight:600;
+    padding:11px 20px; cursor:pointer; height:44px;
+    transition:background .15s; white-space:nowrap;
+  }
+  .send-btn:hover:not(:disabled) { background:#3a7aee; }
+  .send-btn:disabled { background:var(--border); color:var(--muted); cursor:not-allowed; }
+
+  .empty-state {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px;
+    color:var(--muted); text-align:center;
+  }
+  .empty-state .icon { font-size:36px; margin-bottom:8px; }
+  .empty-state p { font-size:13px; max-width:300px; line-height:1.6; }
+
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">AA</div>
+  <h1>Agentic Analytics <span>— Retail TPC-DS</span></h1>
+  <div class="badge">BIGDATA 2026A</div>
+</header>
+
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside>
+    <div>
+        <div class="side-section-title">
+            Estado del Sistema
+        </div>
+
+        <div class="metric">
+            <div class="val">ONLINE</div>
+            <div class="lbl">
+                Datos Simulados
+            </div>
+        </div>
+    </div>
+    <div>
+      <div class="side-section-title">Motor de ejecución</div>
+      <div class="engine-grid">
+        <button class="eng-btn active" id="eng-hive"  onclick="setEngine('hive')"> Hive</button>
+        <button class="eng-btn"        id="eng-spark" onclick="setEngine('spark')"> Spark</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="side-section-title">Consultas sugeridas</div>
+      <div class="suggested">
+        <button class="sug-btn" onclick="useSuggestion(this)">¿Cuáles fueron los 5 productos más vendidos?</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">¿Qué tienda tuvo mayores ventas?</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">¿Cuál fue el mes con mayores ingresos?</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">¿Cuáles son los 10 mejores clientes?</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">¿Qué productos generaron mayores ingresos?</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">Top 20 clientes con mayor número de compras</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">Ventas por día de la semana</button>
+        <button class="sug-btn" onclick="useSuggestion(this)">Ticket promedio por cliente</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="side-section-title">Schema activo</div>
+      <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1.8">
+        📋 customer<br>
+        📋 item<br>
+        📋 store<br>
+        📋 date_dim<br>
+        📦 store_sales <span style="color:var(--accent)">[FACT]</span>
+      </div>
+    </div>
+  </aside>
+  
+
+  <!-- Main -->
+  <main>
+    <div class="dashboard-kpis">
+
+    <div class="kpi-card">
+        <span>Ventas Totales</span>
+        <h2>$18.4M</h2>
+    </div>
+
+    <div class="kpi-card">
+        <span>Clientes</span>
+        <h2>52,340</h2>
+    </div>
+
+    <div class="kpi-card">
+        <span>Productos</span>
+        <h2>8,120</h2>
+    </div>
+
+    <div class="kpi-card">
+        <span>Tiendas</span>
+        <h2>34</h2>
+    </div>
+
+</div>
+    <!-- Pipeline -->
+    <div class="pipeline">
+      <div class="pipe-step" id="ps-intent"><div class="dot"></div>Skill 1: Intención</div>
+      <div class="pipe-arrow">›</div>
+      <div class="pipe-step" id="ps-sql"><div class="dot"></div>Skill 2: SQL</div>
+      <div class="pipe-arrow">›</div>
+      <div class="pipe-step" id="ps-engine"><div class="dot"></div>Skill 3: Motor</div>
+      <div class="pipe-arrow">›</div>
+      <div class="pipe-step" id="ps-exec"><div class="dot"></div>Skill 4: Ejecución</div>
+      <div class="pipe-arrow">›</div>
+      <div class="pipe-step" id="ps-result"><div class="dot"></div>Skill 5: Resultado</div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-area" id="chatArea">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🤖</div>
+        <p>Escribe una pregunta en español sobre los datos retail TPC-DS y el agente generará el SQL automáticamente.</p>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-bar">
+      <textarea id="queryInput" placeholder="Ej: ¿Cuáles fueron los productos más vendidos en diciembre?" rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="runQuery()">Analizar →</button>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let engine = 'hive';
+
+const SCHEMA = `
+TPC-DS Retail Data Warehouse — Schema de tablas disponibles:
+
+TABLE customer (
+  c_customer_sk      INT,        -- PK
+  c_customer_id      STRING,
+  c_first_name       STRING,
+  c_last_name        STRING,
+  c_birth_year       INT,
+  c_birth_country    STRING,
+  c_email_address    STRING,
+  c_preferred_cust_flag STRING
+)
+
+TABLE item (
+  i_item_sk          INT,        -- PK
+  i_item_id          STRING,
+  i_item_desc        STRING,
+  i_current_price    DECIMAL(7,2),
+  i_class            STRING,
+  i_category         STRING,
+  i_brand            STRING,
+  i_product_name     STRING
+)
+
+TABLE store (
+  s_store_sk         INT,        -- PK
+  s_store_id         STRING,
+  s_store_name       STRING,
+  s_city             STRING,
+  s_state            STRING,
+  s_country          STRING,
+  s_gmt_offset       DECIMAL(5,2),
+  s_number_employees INT
+)
+
+TABLE date_dim (
+  d_date_sk          INT,        -- PK
+  d_date_id          STRING,
+  d_date             DATE,
+  d_month_seq        INT,
+  d_year             INT,
+  d_moy              INT,        -- month of year (1-12)
+  d_dom              INT,        -- day of month
+  d_dow              INT,        -- day of week (0=Sun)
+  d_quarter_name     STRING,
+  d_day_name         STRING
+)
+
+TABLE store_sales (                -- FACT TABLE
+  ss_sold_date_sk    INT,         -- FK → date_dim.d_date_sk
+  ss_item_sk         INT,         -- FK → item.i_item_sk
+  ss_customer_sk     INT,         -- FK → customer.c_customer_sk
+  ss_store_sk        INT,         -- FK → store.s_store_sk
+  ss_ticket_number   BIGINT,
+  ss_quantity        INT,
+  ss_sales_price     DECIMAL(7,2),
+  ss_net_paid        DECIMAL(7,2),
+  ss_net_profit      DECIMAL(7,2),
+  ss_wholesale_cost  DECIMAL(7,2),
+  ss_list_price      DECIMAL(7,2)
+)
+`;
+
+const SYSTEM_PROMPT = `Eres un asistente experto en SQL para análisis de datos retail sobre un Data Warehouse TPC-DS.
+Tu única tarea es generar consultas SQL válidas para ${engine === 'hive' ? 'Apache Hive (HiveQL)' : 'Apache Spark SQL'}.
+
+${SCHEMA}
+
+Reglas estrictas:
+1. Responde ÚNICAMENTE con un objeto JSON con este formato exacto, sin texto adicional, sin backticks:
+{"sql": "...", "explanation": "...", "tables": [...], "intent": "..."}
+
+2. El campo "sql" debe ser una consulta HiveQL/SparkSQL válida usando las tablas del schema.
+3. El campo "explanation" debe explicar brevemente qué hace la consulta (en español, máximo 2 oraciones).
+4. El campo "tables" lista las tablas usadas.
+5. El campo "intent" resume la intención del usuario en 5 palabras máximo.
+6. Si la pregunta no se puede responder con el schema, devuelve sql: null.
+7. No uses funciones no estándar. Usa sintaxis compatible con ${engine === 'hive' ? 'Hive 3.x' : 'Spark SQL 3.x'}.`;
+
+// ── Fake result generator (simulates EMR execution) ─────────────────────
+function fakeResults(sql, intent) {
+  const q = (sql || '').toLowerCase();
+
+  if (q.includes('top') || q.includes('limit') || q.includes('rank') || q.includes('order by')) {
+    if (q.includes('item') || q.includes('product') || q.includes('i_product')) {
+      return {
+        columns: ['Producto', 'Total Vendido', 'Ingresos ($)'],
+        rows: [
+          ['Laptop Pro 15"', '12,430', '$1,854,200'],
+          ['Auriculares BT', '11,820', '$420,150'],
+          ['Tablet Air 10', '10,950', '$987,400'],
+          ['Smartphone X12', '10,100', '$2,100,000'],
+          ['Monitor 27" 4K', '9,870', '$1,540,200'],
+        ],
+        execTime: (Math.random()*8+2).toFixed(1),
+        rows_scanned: '18.4M'
+      };
+    }
+    if (q.includes('store') || q.includes('tienda') || q.includes('s_store')) {
+      return {
+        columns: ['Tienda', 'Ciudad', 'Ventas Totales ($)'],
+        rows: [
+          ['Store #42', 'Lima', '$4,230,100'],
+          ['Store #07', 'Arequipa', '$3,890,450'],
+          ['Store #15', 'Cusco', '$3,541,200'],
+          ['Store #31', 'Trujillo', '$3,120,800'],
+          ['Store #09', 'Piura', '$2,980,300'],
+        ],
+        execTime: (Math.random()*12+3).toFixed(1),
+        rows_scanned: '22.1M'
+      };
+    }
+    if (q.includes('customer') || q.includes('cliente') || q.includes('c_customer')) {
+      return {
+        columns: ['Cliente', 'Nro Compras', 'Gasto Total ($)'],
+        rows: [
+          ['Carlos Mendoza', '187', '$42,300'],
+          ['Ana Flores', '164', '$38,700'],
+          ['Luis Paredes', '159', '$35,120'],
+          ['María Castro', '147', '$33,400'],
+          ['Jorge Quispe', '143', '$31,900'],
+          ['Rosa Huanca', '138', '$29,800'],
+          ['Pedro Mamani', '134', '$28,600'],
+          ['Lucía Torres', '129', '$27,100'],
+          ['Andrés Soto', '125', '$25,800'],
+          ['Elena Vargas', '121', '$24,900'],
+        ],
+        execTime: (Math.random()*15+4).toFixed(1),
+        rows_scanned: '25.7M'
+      };
+    }
+  }
+
+  if (q.includes('month') || q.includes('mes') || q.includes('d_moy')) {
+    return {
+      columns: ['Mes', 'Año', 'Ingresos ($)', 'Nro Transacciones'],
+      rows: [
+        ['Diciembre', '2023', '$8,421,300', '124,200'],
+        ['Noviembre', '2023', '$7,890,100', '118,400'],
+        ['Marzo', '2023', '$6,540,200', '$99,300'],
+        ['Enero', '2023', '$6,210,800', '95,100'],
+        ['Octubre', '2023', '$5,980,400', '91,200'],
+      ],
+      execTime: (Math.random()*10+2).toFixed(1),
+      rows_scanned: '30.2M'
+    };
+  }
+
+  if (q.includes('day') || q.includes('dow') || q.includes('semana')) {
+    return {
+      columns: ['Día', 'Ventas ($)', 'Transacciones'],
+      rows: [
+        ['Sábado',  '$12,430,100', '185,200'],
+        ['Viernes', '$11,820,400', '174,100'],
+        ['Domingo', '$10,950,300', '163,800'],
+        ['Jueves',  '$9,870,200',  '$148,400'],
+        ['Miércoles','$8,540,100', '$132,200'],
+        ['Martes',  '$7,890,300', '120,100'],
+        ['Lunes',   '$7,210,800', '110,900'],
+      ],
+      execTime: (Math.random()*8+1).toFixed(1),
+      rows_scanned: '15.8M'
+    };
+  }
+
+  // default
+  return {
+    columns: ['Resultado', 'Valor'],
+    rows: [['Total registros', '45,231,890'], ['Periodo', '2020–2023']],
+    execTime: (Math.random()*5+1).toFixed(1),
+    rows_scanned: '10.0M'
+  };
+}
+
+// ── Pipeline UI ────────────────────────────────────────────────────────────
+function setPipeStep(active) {
+  const steps = ['intent','sql','engine','exec','result'];
+  steps.forEach((s, i) => {
+    const el = document.getElementById('ps-'+s);
+    el.className = 'pipe-step';
+    const idx = steps.indexOf(active);
+    if (i < idx)       el.classList.add('done');
+    else if (i === idx) el.classList.add('active');
+  });
+}
+
+function pipelineDone() {
+  ['intent','sql','engine','exec','result'].forEach(s =>
+    document.getElementById('ps-'+s).classList.add('done')
+  );
+}
+
+function pipelineReset() {
+  ['intent','sql','engine','exec','result'].forEach(s => {
+    const el = document.getElementById('ps-'+s);
+    el.className = 'pipe-step';
+  });
+}
+
+// ── Engine ─────────────────────────────────────────────────────────────────
+function setEngine(e) {
+  engine = e;
+  document.getElementById('eng-hive').className  = 'eng-btn' + (e==='hive'  ? ' active' : '');
+  document.getElementById('eng-spark').className = 'eng-btn' + (e==='spark' ? ' active' : '');
+}
+
+// ── Suggestions ────────────────────────────────────────────────────────────
+function useSuggestion(btn) {
+  document.getElementById('queryInput').value = btn.textContent.trim();
+  autoResize(document.getElementById('queryInput'));
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runQuery(); }
+}
+
+function scrollBottom() {
+  const c = document.getElementById('chatArea');
+  c.scrollTop = c.scrollHeight;
+}
+
+function appendMsg(html, role='agent') {
+  document.getElementById('emptyState')?.remove();
+  const chat = document.getElementById('chatArea');
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role}`;
+  const avatar = `<div class="avatar ${role}">${role==='agent'?'🤖':'U'}</div>`;
+  wrap.innerHTML = role === 'agent'
+    ? `${avatar}<div class="bubble">${html}</div>`
+    : `<div class="bubble">${html}</div>${avatar}`;
+  chat.appendChild(wrap);
+  scrollBottom();
+  return wrap.querySelector('.bubble');
+}
+
+function copyCode(btn, code) {
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = '✓ copiado';
+    setTimeout(() => btn.textContent = 'copiar', 1500);
+  });
+}
+
+// ── Main query flow ────────────────────────────────────────────────────────
+async function runQuery() {
+  const query  = document.getElementById('queryInput').value.trim();
+  if (!query) return;
+
+  document.getElementById('queryInput').value = '';
+  autoResize(document.getElementById('queryInput'));
+  document.getElementById('sendBtn').disabled = true;
+  pipelineReset();
+
+  // User bubble
+  appendMsg(query, 'user');
+
+  // Thinking bubble
+  const thinkBubble = appendMsg(`
+    <div class="thinking">
+      <div class="dots"><span></span><span></span><span></span></div>
+      Interpretando intención…
+    </div>
+  `);
+
+  // ── Skill 1: Intent
+  setPipeStep('intent');
+  await sleep(600);
+
+  // ── Skill 2: SQL generado por Agente Analítico
+  setPipeStep('sql');
+  thinkBubble.innerHTML = `
+    <div class="thinking">
+      <div class="dots"><span></span><span></span><span></span></div>
+      Analizando intención y construyendo SQL…
+    </div>`;
+
+  let parsed;
+  try {
+    const systemWithEngine = SYSTEM_PROMPT.replace(/\$\{engine[^}]*\}/g,
+      engine === 'hive' ? 'Apache Hive (HiveQL)' : 'Apache Spark SQL');
+    parsed = {
+      intent:
+        "Análisis Retail",
+
+      explanation:
+        "Consulta generada automáticamente por el agente analítico.",
+
+      tables:[
+        "store_sales",
+        "customer",
+        "item"
+      ],
+
+      sql: `
+        SELECT *
+        FROM store_sales
+        LIMIT 10
+        `
+    };
+    
+  } catch(err) {
+    thinkBubble.innerHTML = `<span style="color:var(--warn)">⚠️ Error al contactar Gemini: ${err.message}</span>`;
+    document.getElementById('sendBtn').disabled = false;
+    pipelineReset();
+    return;
+  }
+
+  if (!parsed.sql) {
+    thinkBubble.innerHTML = `<span style="color:var(--muted)">No pude generar una consulta para esa pregunta con el schema disponible.</span>`;
+    document.getElementById('sendBtn').disabled = false;
+    return;
+  }
+
+  // ── Skill 3: Engine selection
+  setPipeStep('engine');
+  thinkBubble.innerHTML = `
+    <div class="thinking">
+      <div class="dots"><span></span><span></span><span></span></div>
+      Seleccionando motor: ${engine === 'hive' ? ' Hive' : ' Spark'}…
+    </div>`;
+  await sleep(500);
+
+  // ── Skill 4: Execution
+  setPipeStep('exec');
+  thinkBubble.innerHTML = `
+    <div class="thinking">
+      <div class="dots"><span></span><span></span><span></span></div>
+      Ejecutando en ${engine === 'hive' ? 'Apache Hive' : 'Spark SQL'}…
+    </div>`;
+  await sleep(800 + Math.random()*600);
+
+  const result = fakeResults(parsed.sql, parsed.intent);
+
+  // ── Skill 5: Present results
+  setPipeStep('result');
+  await sleep(300);
+  pipelineDone();
+
+  const escapedSQL = parsed.sql.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tableHTML = buildTable(result);
+  const engineBadge = engine === 'hive'
+    ? '<span style="color:#f0b030"> Apache Hive</span>'
+    : '<span style="color:#e25a1c"> Apache Spark SQL</span>';
+
+  thinkBubble.innerHTML = `
+    <div>
+      <span class="skill-tag"> Skill 1 — Intención: ${parsed.intent || 'análisis'}</span>
+      <span class="skill-tag sql"> Skill 2 — SQL generado por Gemini</span>
+      <span class="skill-tag exec">▶ Skill 4 — Motor: ${engine.toUpperCase()}</span>
+    </div>
+
+    <p style="margin-bottom:10px;color:var(--muted);font-size:12px">${parsed.explanation}</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span>${engineBadge} &nbsp;·&nbsp; ${(parsed.tables||[]).join(', ')}</span>
+        <button class="copy-btn" onclick="copyCode(this, \`${parsed.sql.replace(/`/g,"'")}\`)">copiar</button>
+      </div>
+      <pre>${escapedSQL}</pre>
+    </div>
+
+    ${tableHTML}
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="val">${result.execTime}s</div>
+        <div class="lbl">Tiempo de ejecución</div>
+      </div>
+      <div class="metric">
+        <div class="val">${result.rows_scanned}</div>
+        <div class="lbl">Filas escaneadas</div>
+      </div>
+      <div class="metric">
+        <div class="val">${result.rows.length}</div>
+        <div class="lbl">Filas resultado</div>
+      </div>
+    </div>
+  `;
+  createChart();
+
+  scrollBottom();
+  document.getElementById('sendBtn').disabled = false;
+}
+
+function buildTable(result) {
+  const ths = result.columns.map(c => `<th>${c}</th>`).join('');
+  const trs = result.rows.map(r =>
+    `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`
+  ).join('');
+  return `<div class="result-table-wrap"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
+function createChart(){
+
+const old =
+document.getElementById(
+'resultChart'
+);
+
+if(old)
+old.remove();
+
+const canvas =
+document.createElement(
+'canvas'
+);
+
+canvas.id =
+'resultChart';
+
+document
+.querySelector(
+'.chat-area'
+)
+.appendChild(canvas);
+
+new Chart(canvas,{
+
+type:'bar',
+
+data:{
+labels:[
+'P1',
+'P2',
+'P3',
+'P4',
+'P5'
+],
+
+datasets:[{
+
+label:'Ventas',
+
+data:[
+120,
+100,
+90,
+70,
+50
+]
+
+}]
+}
+
+});
+
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
