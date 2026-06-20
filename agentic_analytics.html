@@ -320,6 +320,15 @@
                 Datos Simulados
             </div>
         </div>
+        <div class="metric">
+            <div class="val">ONLINE</div>
+            <div class="lbl">Gemini 2.5 Flash</div>
+        </div>
+
+        <div class="metric">
+            <div class="val">DEMO</div>
+            <div class="lbl">Hive / Spark Simulado</div>
+        </div>
     </div>
     <div>
       <div class="side-section-title">Motor de ejecución</div>
@@ -414,6 +423,7 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let engine = 'hive';
+const GEMINI_API_KEY = "TU_API_KEY";
 
 const SCHEMA = `
 TPC-DS Retail Data Warehouse — Schema de tablas disponibles:
@@ -493,7 +503,29 @@ Reglas estrictas:
 4. El campo "tables" lista las tablas usadas.
 5. El campo "intent" resume la intención del usuario en 5 palabras máximo.
 6. Si la pregunta no se puede responder con el schema, devuelve sql: null.
-7. No uses funciones no estándar. Usa sintaxis compatible con ${engine === 'hive' ? 'Hive 3.x' : 'Spark SQL 3.x'}.`;
+7. No uses funciones no estándar. Usa sintaxis compatible con ${engine === 'hive' ? 'Hive 3.x' : 'Spark SQL 3.x'}.
+Consultas obligatorias del proyecto:
+
+- Top 20 clientes con mayor número de compras
+- Ventas por tienda
+- Ventas por mes
+- Ventas por día de la semana
+- Top productos por tienda
+- Ticket promedio por cliente
+- Productos con mayor ingreso generado
+- Top clientes por gasto total
+- Ranking mensual de ventas
+
+Genera SQL Hive o Spark válido usando únicamente:
+
+customer
+item
+store
+date_dim
+store_sales
+
+Responde únicamente JSON.`;
+
 
 // ── Fake result generator (simulates EMR execution) ─────────────────────
 function fakeResults(sql, intent) {
@@ -701,26 +733,47 @@ async function runQuery() {
   try {
     const systemWithEngine = SYSTEM_PROMPT.replace(/\$\{engine[^}]*\}/g,
       engine === 'hive' ? 'Apache Hive (HiveQL)' : 'Apache Spark SQL');
-    parsed = {
-      intent:
-        "Análisis Retail",
+      const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json'
+        },
+        body:JSON.stringify({
+          system_instruction:{
+            parts:[
+              {
+                text:systemWithEngine
+              }
+            ]
+          },
+          contents:[
+            {
+              parts:[
+                {
+                  text:query
+                }
+              ]
+            }
+          ]
+        })
+      });
 
-      explanation:
-        "Consulta generada automáticamente por el agente analítico.",
+      const data = await res.json();
 
-      tables:[
-        "store_sales",
-        "customer",
-        "item"
-      ],
+      if(data.error)
+          throw new Error(data.error.message);
 
-      sql: `
-        SELECT *
-        FROM store_sales
-        LIMIT 10
-        `
-    };
-    
+      let raw =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      raw =
+      raw.replace(/```json|```/g,'').trim();
+
+      parsed =
+      JSON.parse(raw);
+          
   } catch(err) {
     thinkBubble.innerHTML = `<span style="color:var(--warn)">⚠️ Error al contactar Gemini: ${err.message}</span>`;
     document.getElementById('sendBtn').disabled = false;
