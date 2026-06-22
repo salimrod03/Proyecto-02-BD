@@ -310,24 +310,25 @@
   <!-- Sidebar -->
   <aside>
     <div>
-        <div class="side-section-title">
-            Estado del Sistema
+        <div class="side-section-title">Gemini API Key</div>
+        <div class="api-wrap">
+          <input type="password" id="geminiKeyInput" placeholder="AIzaSy..."
+            oninput="saveKey(this.value)" />
+          <button class="eye-btn" onclick="toggleKey()">👁</button>
         </div>
-
-        <div class="metric">
-            <div class="val">ONLINE</div>
-            <div class="lbl">
-                Datos Simulados
-            </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">
+          Se guarda en localStorage. No va al repositorio.
         </div>
+    </div>
+    <div>
+        <div class="side-section-title">Estado del Sistema</div>
         <div class="metric">
-            <div class="val">ONLINE</div>
+            <div class="val" id="statusGemini">—</div>
             <div class="lbl">Gemini 2.5 Flash</div>
         </div>
-
         <div class="metric">
-            <div class="val">DEMO</div>
-            <div class="lbl">Hive / Spark Simulado</div>
+            <div class="val">REAL</div>
+            <div class="lbl">Hive / Spark en EMR</div>
         </div>
     </div>
     <div>
@@ -423,7 +424,29 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let engine = 'hive';
-const GEMINI_API_KEY = "TU_API_KEY";
+
+// ─── CONFIGURACIÓN EMR ────────────────────────────────────────────────────
+// Cambia esta IP por la DNS pública del nodo principal de tu cluster EMR.
+const EMR_API_URL = "http://3.89.19.55:5000/query";
+
+// ── API Key (localStorage, nunca en el código) ─────────────────────────────
+function getKey() { return localStorage.getItem('gemini_key') || ''; }
+function saveKey(v) {
+  localStorage.setItem('gemini_key', v);
+  document.getElementById('statusGemini').textContent = v ? 'KEY OK' : '—';
+}
+function toggleKey() {
+  const inp = document.getElementById('geminiKeyInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+// Cargar key guardada al iniciar
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = getKey();
+  if (saved) {
+    document.getElementById('geminiKeyInput').value = saved;
+    document.getElementById('statusGemini').textContent = 'KEY OK';
+  }
+});
 
 const SCHEMA = `
 TPC-DS Retail Data Warehouse — Schema de tablas disponibles:
@@ -527,98 +550,24 @@ store_sales
 Responde únicamente JSON.`;
 
 
-// ── Fake result generator (simulates EMR execution) ─────────────────────
-function fakeResults(sql, intent) {
-  const q = (sql || '').toLowerCase();
-
-  if (q.includes('top') || q.includes('limit') || q.includes('rank') || q.includes('order by')) {
-    if (q.includes('item') || q.includes('product') || q.includes('i_product')) {
-      return {
-        columns: ['Producto', 'Total Vendido', 'Ingresos ($)'],
-        rows: [
-          ['Laptop Pro 15"', '12,430', '$1,854,200'],
-          ['Auriculares BT', '11,820', '$420,150'],
-          ['Tablet Air 10', '10,950', '$987,400'],
-          ['Smartphone X12', '10,100', '$2,100,000'],
-          ['Monitor 27" 4K', '9,870', '$1,540,200'],
-        ],
-        execTime: (Math.random()*8+2).toFixed(1),
-        rows_scanned: '18.4M'
-      };
-    }
-    if (q.includes('store') || q.includes('tienda') || q.includes('s_store')) {
-      return {
-        columns: ['Tienda', 'Ciudad', 'Ventas Totales ($)'],
-        rows: [
-          ['Store #42', 'Lima', '$4,230,100'],
-          ['Store #07', 'Arequipa', '$3,890,450'],
-          ['Store #15', 'Cusco', '$3,541,200'],
-          ['Store #31', 'Trujillo', '$3,120,800'],
-          ['Store #09', 'Piura', '$2,980,300'],
-        ],
-        execTime: (Math.random()*12+3).toFixed(1),
-        rows_scanned: '22.1M'
-      };
-    }
-    if (q.includes('customer') || q.includes('cliente') || q.includes('c_customer')) {
-      return {
-        columns: ['Cliente', 'Nro Compras', 'Gasto Total ($)'],
-        rows: [
-          ['Carlos Mendoza', '187', '$42,300'],
-          ['Ana Flores', '164', '$38,700'],
-          ['Luis Paredes', '159', '$35,120'],
-          ['María Castro', '147', '$33,400'],
-          ['Jorge Quispe', '143', '$31,900'],
-          ['Rosa Huanca', '138', '$29,800'],
-          ['Pedro Mamani', '134', '$28,600'],
-          ['Lucía Torres', '129', '$27,100'],
-          ['Andrés Soto', '125', '$25,800'],
-          ['Elena Vargas', '121', '$24,900'],
-        ],
-        execTime: (Math.random()*15+4).toFixed(1),
-        rows_scanned: '25.7M'
-      };
-    }
+// ── Real EMR execution ────────────────────────────────────────────────────
+async function realResults(sql, eng) {
+  const res = await fetch(EMR_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sql, engine: eng })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `HTTP ${res.status}`);
   }
-
-  if (q.includes('month') || q.includes('mes') || q.includes('d_moy')) {
-    return {
-      columns: ['Mes', 'Año', 'Ingresos ($)', 'Nro Transacciones'],
-      rows: [
-        ['Diciembre', '2023', '$8,421,300', '124,200'],
-        ['Noviembre', '2023', '$7,890,100', '118,400'],
-        ['Marzo', '2023', '$6,540,200', '$99,300'],
-        ['Enero', '2023', '$6,210,800', '95,100'],
-        ['Octubre', '2023', '$5,980,400', '91,200'],
-      ],
-      execTime: (Math.random()*10+2).toFixed(1),
-      rows_scanned: '30.2M'
-    };
-  }
-
-  if (q.includes('day') || q.includes('dow') || q.includes('semana')) {
-    return {
-      columns: ['Día', 'Ventas ($)', 'Transacciones'],
-      rows: [
-        ['Sábado',  '$12,430,100', '185,200'],
-        ['Viernes', '$11,820,400', '174,100'],
-        ['Domingo', '$10,950,300', '163,800'],
-        ['Jueves',  '$9,870,200',  '$148,400'],
-        ['Miércoles','$8,540,100', '$132,200'],
-        ['Martes',  '$7,890,300', '120,100'],
-        ['Lunes',   '$7,210,800', '110,900'],
-      ],
-      execTime: (Math.random()*8+1).toFixed(1),
-      rows_scanned: '15.8M'
-    };
-  }
-
-  // default
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
   return {
-    columns: ['Resultado', 'Valor'],
-    rows: [['Total registros', '45,231,890'], ['Periodo', '2020–2023']],
-    execTime: (Math.random()*5+1).toFixed(1),
-    rows_scanned: '10.0M'
+    columns:      data.columns      || [],
+    rows:         data.rows         || [],
+    execTime:     data.exec_time    ?? '—',
+    rows_scanned: data.rows_scanned ?? '—'
   };
 }
 
@@ -731,10 +680,17 @@ async function runQuery() {
 
   let parsed;
   try {
+    const geminiKey = getKey();
+    if (!geminiKey) {
+      thinkBubble.innerHTML = `<span style="color:var(--warn)">⚠️ Ingresa tu Gemini API Key en el panel izquierdo.</span>`;
+      document.getElementById('sendBtn').disabled = false;
+      pipelineReset();
+      return;
+    }
     const systemWithEngine = SYSTEM_PROMPT.replace(/\$\{engine[^}]*\}/g,
       engine === 'hive' ? 'Apache Hive (HiveQL)' : 'Apache Spark SQL');
       const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
         method:'POST',
         headers:{
@@ -792,20 +748,28 @@ async function runQuery() {
   thinkBubble.innerHTML = `
     <div class="thinking">
       <div class="dots"><span></span><span></span><span></span></div>
-      Seleccionando motor: ${engine === 'hive' ? ' Hive' : ' Spark'}…
+      Seleccionando motor: ${engine === 'hive' ? '🐝 Hive' : '⚡ Spark'}…
     </div>`;
-  await sleep(500);
+  await sleep(400);
 
-  // ── Skill 4: Execution
+  // ── Skill 4: Execution (real EMR query — puede tardar 30-50s)
   setPipeStep('exec');
   thinkBubble.innerHTML = `
     <div class="thinking">
       <div class="dots"><span></span><span></span><span></span></div>
-      Ejecutando en ${engine === 'hive' ? 'Apache Hive' : 'Spark SQL'}…
+      Ejecutando en ${engine === 'hive' ? 'Apache Hive' : 'Spark SQL'} sobre EMR…
+      <span style="color:var(--muted);font-size:11px;margin-left:8px">(puede tardar ~30s)</span>
     </div>`;
-  await sleep(800 + Math.random()*600);
 
-  const result = fakeResults(parsed.sql, parsed.intent);
+  let result;
+  try {
+    result = await realResults(parsed.sql, engine);
+  } catch (err) {
+    thinkBubble.innerHTML = `<span style="color:var(--warn)">⚠️ Error ejecutando en EMR: ${err.message}</span>`;
+    document.getElementById('sendBtn').disabled = false;
+    pipelineReset();
+    return;
+  }
 
   // ── Skill 5: Present results
   setPipeStep('result');
@@ -840,7 +804,7 @@ async function runQuery() {
     <div class="metrics">
       <div class="metric">
         <div class="val">${result.execTime}s</div>
-        <div class="lbl">Tiempo de ejecución</div>
+        <div class="lbl">Tiempo real EMR</div>
       </div>
       <div class="metric">
         <div class="val">${result.rows_scanned}</div>
@@ -852,7 +816,7 @@ async function runQuery() {
       </div>
     </div>
   `;
-  createChart();
+  createChart(result);
 
   scrollBottom();
   document.getElementById('sendBtn').disabled = false;
@@ -866,60 +830,44 @@ function buildTable(result) {
   return `<div class="result-table-wrap"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
 }
 
-function createChart(){
+function createChart(result) {
+  const old = document.getElementById('resultChart');
+  if (old) old.remove();
 
-const old =
-document.getElementById(
-'resultChart'
-);
+  // Solo grafica si hay datos numéricos en la última columna
+  if (!result || !result.rows || result.rows.length === 0) return;
 
-if(old)
-old.remove();
+  const lastColIndex = result.columns.length - 1;
+  const labels = result.rows.map(r => r[0]);
+  const values = result.rows.map(r => {
+    const raw = (r[lastColIndex] || '').replace(/[$,]/g, '');
+    return parseFloat(raw) || 0;
+  });
+  if (values.every(v => v === 0)) return;
 
-const canvas =
-document.createElement(
-'canvas'
-);
+  const canvas = document.createElement('canvas');
+  canvas.id = 'resultChart';
+  canvas.style.maxHeight = '220px';
+  canvas.style.marginTop = '12px';
+  document.querySelector('.chat-area').appendChild(canvas);
 
-canvas.id =
-'resultChart';
-
-document
-.querySelector(
-'.chat-area'
-)
-.appendChild(canvas);
-
-new Chart(canvas,{
-
-type:'bar',
-
-data:{
-labels:[
-'P1',
-'P2',
-'P3',
-'P4',
-'P5'
-],
-
-datasets:[{
-
-label:'Ventas',
-
-data:[
-120,
-100,
-90,
-70,
-50
-]
-
-}]
-}
-
-});
-
+  new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: result.columns[lastColIndex] || 'Valor',
+        data: values,
+        backgroundColor: 'rgba(37,99,235,0.7)',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
