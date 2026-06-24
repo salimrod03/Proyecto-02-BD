@@ -648,47 +648,74 @@ async function runQuery() {
     }
     const systemWithEngine = SYSTEM_PROMPT.replace(/\$\{engine[^}]*\}/g,
       engine === 'hive' ? 'Apache Hive (HiveQL)' : 'Apache Spark SQL');
+
+    const MODELS = [
+      { id: 'gemini-2.5-flash',    label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-1.5-flash',    label: 'Gemini 1.5 Flash' },
+      { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B' },
+    ];
+    const isOverload = msg => /high demand|overload|503|resource exhausted/i.test(msg);
+    const isQuota    = msg => /quota|rate.?limit|429/i.test(msg);
+
+    async function callGemini(modelId) {
       const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json'
-        },
-        body:JSON.stringify({
-          system_instruction:{
-            parts:[
-              {
-                text:systemWithEngine
-              }
-            ]
-          },
-          contents:[
-            {
-              parts:[
-                {
-                  text:query
-                }
-              ]
-            }
-          ]
-        })
-      });
-
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemWithEngine }] },
+            contents: [{ parts: [{ text: query }] }]
+          })
+        }
+      );
       const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      let raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      raw = raw.replace(/```json|```/g, '').trim();
+      return JSON.parse(raw);
+    }
 
-      if(data.error)
-          throw new Error(data.error.message);
+    let lastErr;
+    outer:
+    for (const { id, label } of MODELS) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          thinkBubble.innerHTML = `
+            <div class="thinking">
+              <div class="dots"><span></span><span></span><span></span></div>
+              ${attempt > 1 ? `Reintento ${attempt}/3 · ` : ''}Generando SQL con ${label}…
+            </div>`;
+          parsed = await callGemini(id);
+          break outer;
+        } catch (err) {
+          lastErr = err;
+          if (isQuota(err.message)) {
+            // cuota agotada: no sirve reintentar, saltar al siguiente modelo
+            thinkBubble.innerHTML = `
+              <div class="thinking">
+                <div class="dots"><span></span><span></span><span></span></div>
+                Cuota agotada en ${label}, probando siguiente modelo…
+              </div>`;
+            await sleep(800);
+            break;
+          }
+          if (isOverload(err.message) && attempt < 3) {
+            thinkBubble.innerHTML = `
+              <div class="thinking">
+                <div class="dots"><span></span><span></span><span></span></div>
+                ${label} saturado, esperando ${attempt * 3}s…
+              </div>`;
+            await sleep(attempt * 3000);
+          } else if (!isOverload(err.message)) {
+            throw err;
+          }
+        }
+      }
+    }
+    if (!parsed) throw lastErr;
 
-      let raw =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      raw =
-      raw.replace(/```json|```/g,'').trim();
-
-      parsed =
-      JSON.parse(raw);
-          
   } catch(err) {
     thinkBubble.innerHTML = `<span style="color:var(--warn)">⚠️ Error al contactar Gemini: ${err.message}</span>`;
     document.getElementById('sendBtn').disabled = false;
