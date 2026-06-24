@@ -42,33 +42,37 @@
   /* ── Header ── */
   header{
     background:white;
-    box-shadow:0 4px 20px rgba(0,0,0,.05);
-    border:none;
+    box-shadow:0 2px 12px rgba(0,0,0,.06);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:12px;
+    padding:0 28px; height:56px;
   }
   .logo-mark {
-    width: 32px; height: 32px;
+    width: 34px; height: 34px;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 6px;
+    border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 12px; font-weight: 600; color: #fff;
+    flex-shrink:0;
   }
-  header h1 { font-size: 15px; font-weight: 500; letter-spacing: .02em; }
-  header span { color: var(--muted); font-size: 12px; margin-left: 8px; }
+  .header-text { display:flex; flex-direction:column; gap:1px; }
+  .header-text h1 { font-size: 14px; font-weight: 600; letter-spacing: .01em; line-height:1; }
+  .header-text span { color: var(--muted); font-size: 11px; }
   .badge {
     margin-left: auto;
-    background: rgba(79,140,255,.12);
-    border: 1px solid rgba(79,140,255,.3);
+    background: rgba(79,140,255,.10);
+    border: 1px solid rgba(79,140,255,.25);
     color: var(--accent);
     font-size: 11px; font-family: 'IBM Plex Mono', monospace;
-    padding: 3px 10px; border-radius: 20px;
+    padding: 4px 12px; border-radius: 20px; white-space:nowrap;
   }
 
   /* ── Layout ── */
   .shell {
     display: grid;
     grid-template-columns: 260px 1fr;
-    height: calc(100vh - 61px);
+    height: calc(100vh - 56px);
   }
 
   /* ── Sidebar ── */
@@ -113,31 +117,6 @@
     transition: all .15s; line-height: 1.4;
   }
   .sug-btn:hover { border-color: var(--accent2); color: var(--accent2); }
-  .dashboard-kpis{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:16px;
-    padding:20px 28px;
-}
-
-.kpi-card{
-    background:white;
-    border-radius:16px;
-    padding:20px;
-    box-shadow:0 5px 20px rgba(0,0,0,.08);
-}
-
-.kpi-card span{
-    color:#64748b;
-    font-size:12px;
-}
-
-.kpi-card h2{
-    color:#2563eb;
-    margin-top:10px;
-    font-size:28px;
-}
-
   /* ── Main ── */
   main {
     display: flex; flex-direction: column;
@@ -301,7 +280,10 @@
 
 <header>
   <div class="logo-mark">AA</div>
-  <h1>Agentic Analytics <span>— Retail TPC-DS</span></h1>
+  <div class="header-text">
+    <h1>Agentic Analytics</h1>
+    <span>Retail TPC-DS · BigData 2026A</span>
+  </div>
   <div class="badge">BIGDATA 2026A</div>
 </header>
 
@@ -368,29 +350,6 @@
 
   <!-- Main -->
   <main>
-    <div class="dashboard-kpis">
-
-    <div class="kpi-card">
-        <span>Ventas Totales</span>
-        <h2>$18.4M</h2>
-    </div>
-
-    <div class="kpi-card">
-        <span>Clientes</span>
-        <h2>52,340</h2>
-    </div>
-
-    <div class="kpi-card">
-        <span>Productos</span>
-        <h2>8,120</h2>
-    </div>
-
-    <div class="kpi-card">
-        <span>Tiendas</span>
-        <h2>34</h2>
-    </div>
-
-</div>
     <!-- Pipeline -->
     <div class="pipeline">
       <div class="pipe-step" id="ps-intent"><div class="dot"></div>Skill 1: Intención</div>
