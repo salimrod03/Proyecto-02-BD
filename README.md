@@ -163,6 +163,85 @@ store_sales
 
 ---
 
+## Paso 5b — (Opcional) Crear tablas Parquet para el motor `spark_opt`
+
+El backend soporta tres motores: `hive`, `spark` y `spark_opt`. El motor
+**`spark_opt`** ejecuta Spark SQL con optimizaciones (AQE, coalesce de
+particiones, skew join, broadcast join, filter pushdown) sobre una copia de las
+tablas en **formato Parquet** en la base de datos `tpcds_opt`. El backend
+reescribe automáticamente el SQL generado sobre `tpcds` hacia `tpcds_opt`, así
+que el usuario y Gemini siguen consultando las tablas normales.
+
+> Solo es necesario si vas a usar el botón **⚡ Opt** del frontend. Si no creas
+> estas tablas, `hive` y `spark` siguen funcionando igual.
+
+Dentro del cluster, generar y ejecutar el script de creación:
+
+```bash
+cat > setup_spark_optimized.sql <<'SQL'
+CREATE DATABASE IF NOT EXISTS tpcds_opt;
+
+CREATE TABLE IF NOT EXISTS tpcds_opt.customer_parquet
+USING PARQUET LOCATION 's3://datos-lab-mel/tpcds/parquet/customer'
+AS SELECT * FROM tpcds.customer;
+
+CREATE TABLE IF NOT EXISTS tpcds_opt.item_parquet
+USING PARQUET LOCATION 's3://datos-lab-mel/tpcds/parquet/item'
+AS SELECT * FROM tpcds.item;
+
+CREATE TABLE IF NOT EXISTS tpcds_opt.store_parquet
+USING PARQUET LOCATION 's3://datos-lab-mel/tpcds/parquet/store'
+AS SELECT * FROM tpcds.store;
+
+CREATE TABLE IF NOT EXISTS tpcds_opt.date_dim_parquet
+USING PARQUET LOCATION 's3://datos-lab-mel/tpcds/parquet/date_dim'
+AS SELECT * FROM tpcds.date_dim;
+
+CREATE TABLE IF NOT EXISTS tpcds_opt.store_sales_parquet
+USING PARQUET LOCATION 's3://datos-lab-mel/tpcds/parquet/store_sales'
+AS SELECT * FROM tpcds.store_sales;
+SQL
+
+spark-sql --master yarn --deploy-mode client \
+  --conf spark.sql.catalogImplementation=hive \
+  --conf spark.sql.adaptive.enabled=true \
+  --conf spark.sql.shuffle.partitions=80 \
+  -f setup_spark_optimized.sql
+```
+
+(Opcional) Calcular estadísticas para mejores planes de ejecución:
+
+```bash
+cat > analyze_tables.sql <<'SQL'
+ANALYZE TABLE tpcds_opt.customer_parquet    COMPUTE STATISTICS;
+ANALYZE TABLE tpcds_opt.item_parquet        COMPUTE STATISTICS;
+ANALYZE TABLE tpcds_opt.store_parquet       COMPUTE STATISTICS;
+ANALYZE TABLE tpcds_opt.date_dim_parquet    COMPUTE STATISTICS;
+ANALYZE TABLE tpcds_opt.store_sales_parquet COMPUTE STATISTICS;
+SQL
+
+spark-sql --master yarn --deploy-mode client \
+  --conf spark.sql.catalogImplementation=hive \
+  -f analyze_tables.sql
+```
+
+Verificar:
+
+```bash
+spark-sql --conf spark.sql.catalogImplementation=hive \
+  -e "SHOW TABLES IN tpcds_opt;"
+```
+
+Probar el motor optimizado desde local (el backend devuelve también `sql_used`):
+
+```bash
+curl -X POST http://XX.XX.XX.XX:5000/query \
+  -H "Content-Type: application/json" \
+  -d '{"sql":"SELECT COUNT(*) FROM store_sales","engine":"spark_opt"}'
+```
+
+---
+
 ## Paso 6 — Desplegar el backend Flask
 
 Desde tu máquina local, copiar el archivo al cluster:

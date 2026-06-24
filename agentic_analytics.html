@@ -99,7 +99,7 @@
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
     background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px;
   }
-  .engine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .engine-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .eng-btn {
     background: var(--code-bg); border: 1px solid var(--border);
     border-radius: 6px; color: var(--muted); font-size: 12px;
@@ -310,14 +310,18 @@
         </div>
         <div class="metric">
             <div class="val">REAL</div>
-            <div class="lbl">Hive / Spark en EMR</div>
+            <div class="lbl">Hive / Spark / Opt en EMR</div>
         </div>
     </div>
     <div>
       <div class="side-section-title">Motor de ejecución</div>
       <div class="engine-grid">
-        <button class="eng-btn active" id="eng-hive"  onclick="setEngine('hive')"> Hive</button>
-        <button class="eng-btn"        id="eng-spark" onclick="setEngine('spark')"> Spark</button>
+        <button class="eng-btn active" id="eng-hive"      onclick="setEngine('hive')">🐝 Hive</button>
+        <button class="eng-btn"        id="eng-spark"     onclick="setEngine('spark')">⚡ Spark</button>
+        <button class="eng-btn"        id="eng-spark_opt" onclick="setEngine('spark_opt')">⚡ Opt</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">
+        <b>Opt</b> = Spark SQL sobre tablas Parquet con AQE, broadcast y skew join.
       </div>
     </div>
 
@@ -386,7 +390,7 @@ let engine = 'hive';
 
 // ─── CONFIGURACIÓN EMR ────────────────────────────────────────────────────
 // Cambia esta IP por la DNS pública del nodo principal de tu cluster EMR.
-const EMR_API_URL = "http://3.89.19.55:5000/query";
+const EMR_API_URL = "http://13.218.19.252:5000/query";
 
 // ── API Key (localStorage, nunca en el código) ─────────────────────────────
 function getKey() { return localStorage.getItem('gemini_key') || ''; }
@@ -526,7 +530,10 @@ async function realResults(sql, eng) {
     columns:      data.columns      || [],
     rows:         data.rows         || [],
     execTime:     data.exec_time    ?? '—',
-    rows_scanned: data.rows_scanned ?? '—'
+    rows_scanned: data.rows_scanned ?? '—',
+    optimized:    data.optimized    || false,
+    sqlUsed:      data.sql_used     || null,
+    sqlOriginal:  data.sql_original || null
   };
 }
 
@@ -556,10 +563,24 @@ function pipelineReset() {
 }
 
 // ── Engine ─────────────────────────────────────────────────────────────────
+const ENGINES = ['hive', 'spark', 'spark_opt'];
+
+// Metadatos de presentación por motor (etiquetas, emoji, badge de color)
+function engineInfo(e) {
+  if (e === 'hive')      return { label: 'Apache Hive',  short: 'Hive',      emoji: '🐝',
+                                  badge: '<span style="color:#f0b030"> Apache Hive</span>' };
+  if (e === 'spark_opt') return { label: 'Spark SQL optimizado', short: 'Spark Opt', emoji: '⚡',
+                                  badge: '<span style="color:#16a34a"> Apache Spark SQL ⚡ optimizado</span>' };
+  return                        { label: 'Apache Spark SQL', short: 'Spark', emoji: '⚡',
+                                  badge: '<span style="color:#e25a1c"> Apache Spark SQL</span>' };
+}
+
 function setEngine(e) {
   engine = e;
-  document.getElementById('eng-hive').className  = 'eng-btn' + (e==='hive'  ? ' active' : '');
-  document.getElementById('eng-spark').className = 'eng-btn' + (e==='spark' ? ' active' : '');
+  ENGINES.forEach(name => {
+    document.getElementById('eng-' + name).className =
+      'eng-btn' + (e === name ? ' active' : '');
+  });
 }
 
 // ── Suggestions ────────────────────────────────────────────────────────────
@@ -730,11 +751,12 @@ async function runQuery() {
   }
 
   // ── Skill 3: Engine selection
+  const eng = engineInfo(engine);
   setPipeStep('engine');
   thinkBubble.innerHTML = `
     <div class="thinking">
       <div class="dots"><span></span><span></span><span></span></div>
-      Seleccionando motor: ${engine === 'hive' ? '🐝 Hive' : '⚡ Spark'}…
+      Seleccionando motor: ${eng.emoji} ${eng.short}…
     </div>`;
   await sleep(400);
 
@@ -743,7 +765,7 @@ async function runQuery() {
   thinkBubble.innerHTML = `
     <div class="thinking">
       <div class="dots"><span></span><span></span><span></span></div>
-      Ejecutando en ${engine === 'hive' ? 'Apache Hive' : 'Spark SQL'} sobre EMR…
+      Ejecutando en ${eng.label} sobre EMR…
       <span style="color:var(--muted);font-size:11px;margin-left:8px">(puede tardar ~30s)</span>
     </div>`;
 
@@ -764,15 +786,28 @@ async function runQuery() {
 
   const escapedSQL = parsed.sql.replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const tableHTML = buildTable(result);
-  const engineBadge = engine === 'hive'
-    ? '<span style="color:#f0b030"> Apache Hive</span>'
-    : '<span style="color:#e25a1c"> Apache Spark SQL</span>';
+  const engineBadge = eng.badge;
+
+  // Si el motor optimizado reescribió el SQL a tablas Parquet, lo mostramos
+  // para justificar la optimización frente al SQL original.
+  let optimizedBlock = '';
+  if (result.optimized && result.sqlUsed && result.sqlUsed !== parsed.sql) {
+    const escapedOpt = result.sqlUsed.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    optimizedBlock = `
+    <div class="code-block">
+      <div class="code-header">
+        <span style="color:#16a34a">⚡ SQL ejecutado (reescrito a Parquet)</span>
+        <button class="copy-btn" onclick="copyCode(this, \`${result.sqlUsed.replace(/`/g,"'")}\`)">copiar</button>
+      </div>
+      <pre>${escapedOpt}</pre>
+    </div>`;
+  }
 
   thinkBubble.innerHTML = `
     <div>
       <span class="skill-tag"> Skill 1 — Intención: ${parsed.intent || 'análisis'}</span>
       <span class="skill-tag sql"> Skill 2 — SQL generado por Gemini</span>
-      <span class="skill-tag exec">▶ Skill 4 — Motor: ${engine.toUpperCase()}</span>
+      <span class="skill-tag exec">▶ Skill 4 — Motor: ${eng.short}${result.optimized ? ' ⚡' : ''}</span>
     </div>
 
     <p style="margin-bottom:10px;color:var(--muted);font-size:12px">${parsed.explanation}</p>
@@ -784,6 +819,8 @@ async function runQuery() {
       </div>
       <pre>${escapedSQL}</pre>
     </div>
+
+    ${optimizedBlock}
 
     ${tableHTML}
 
